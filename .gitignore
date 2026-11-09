@@ -1,0 +1,3 @@
+# Uploaded files
+uploads/edoc/*
+!uploads/edoc/index.html

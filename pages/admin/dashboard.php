@@ -375,29 +375,28 @@ body { font-family: 'Poppins', sans-serif; background: var(--bg-page); }
     border: 1px solid rgba(0,0,0,0.06);
     display: flex;
     align-items: center;
-    padding: 2px 0;
+    justify-content: center;
+    padding: 3px 4px;
 }
 .jc-stat-col {
     flex: 1;
     text-align: center;
     padding: 0 2px;
 }
-.jc-stat-col.mid-col {
-    border-left: 1px solid #f1f5f9;
-    border-right: 1px solid #f1f5f9;
-}
 .jc-stat-col .n-num {
-    font-size: .84rem;
+    font-size: .95rem;
     font-weight: 800;
-    line-height: 1;
+    line-height: 1.1;
     display: block;
 }
 .jc-stat-col .n-lbl {
-    font-size: .52rem;
+    font-size: .56rem;
     font-weight: 700;
-    color: #94a3b8;
+    color: #64748b;
     display: block;
     margin-top: 1px;
+    text-transform: uppercase;
+    letter-spacing: .3px;
 }
 
 /* Kalender Libur (Top Right) */
@@ -849,16 +848,8 @@ body { font-family: 'Poppins', sans-serif; background: var(--bg-page); }
                             </div>
                             <div class="jc-stat-pill">
                                 <div class="jc-stat-col">
-                                    <span class="n-num text-success"><?= $jc['disetujui'] ?></span>
-                                    <span class="n-lbl">ACC</span>
-                                </div>
-                                <div class="jc-stat-col mid-col">
-                                    <span class="n-num text-warning"><?= $jc['menunggu'] ?></span>
-                                    <span class="n-lbl">TUNGGU</span>
-                                </div>
-                                <div class="jc-stat-col">
-                                    <span class="n-num text-danger"><?= $jc['ditolak'] ?></span>
-                                    <span class="n-lbl">TOLAK</span>
+                                    <span class="n-num" style="color:<?= $m['icon_color'] ?? '#004d00' ?>;"><?= (int)$jc['total_pengajuan'] ?></span>
+                                    <span class="n-lbl">Total Pengajuan</span>
                                 </div>
                             </div>
                         </div>
@@ -923,8 +914,6 @@ body { font-family: 'Poppins', sans-serif; background: var(--bg-page); }
                             <th>Pegawai</th>
                             <th>Jenis Cuti</th>
                             <th>Periode</th>
-                            <th class="text-center">Durasi</th>
-                            <th>Keterangan</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -932,13 +921,11 @@ body { font-family: 'Poppins', sans-serif; background: var(--bg-page); }
                         <tr>
                             <td class="text-center text-muted font-weight-bold"><?= $no++ ?></td>
                             <td>
-                                <div class="font-weight-bold text-dark text-truncate" style="max-width:140px; font-size:.76rem;"><?= htmlspecialchars($cp['nama_lengkap']) ?></div>
-                                <div class="text-muted text-truncate" style="max-width:140px; font-size:.62rem;">NIP: <?= htmlspecialchars($cp['nip']) ?></div>
+                                <div class="font-weight-bold text-dark" style="font-size:.78rem;"><?= htmlspecialchars($cp['nama_lengkap']) ?></div>
+                                <div class="text-muted" style="font-size:.64rem;">NIP: <?= htmlspecialchars($cp['nip']) ?></div>
                             </td>
                             <td><span class="<?= $mc['badge_class'] ?>"><?= htmlspecialchars($cp['nama_jenis']) ?></span></td>
-                            <td style="font-size:.72rem;" class="text-nowrap font-weight-bold text-dark"><?= date('d/m',strtotime($cp['tgl_mulai'])) ?> - <?= date('d/m/Y',strtotime($cp['tgl_selesai'])) ?></td>
-                            <td class="text-center"><span class="badge-durasi"><?= $cp['lama_hari'] ?>h</span></td>
-                            <td><div class="text-muted text-truncate" style="max-width:120px; font-size:.70rem;" title="<?= htmlspecialchars($cp['alasan']??'-') ?>"><?= htmlspecialchars($cp['alasan']??'-') ?></div></td>
+                            <td style="font-size:.74rem;" class="text-nowrap font-weight-bold text-dark"><?= date('d/m',strtotime($cp['tgl_mulai'])) ?> - <?= date('d/m/Y',strtotime($cp['tgl_selesai'])) ?></td>
                         </tr>
                         <?php endwhile; ?>
                     </tbody>

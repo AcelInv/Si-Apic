@@ -96,6 +96,8 @@ if (isset($_POST['edit'])) {
     }
 }
 
+$halaman = isset($_GET['halaman']) ? (int)$_GET['halaman'] : 1;
+
 if (isset($_GET['toggle_status'])) {
     $id = $_GET['toggle_status'];
     $cek = mysqli_query($koneksi, "SELECT status_akun FROM users WHERE id_user='$id'");
@@ -105,8 +107,42 @@ if (isset($_GET['toggle_status'])) {
     echo "<script>window.location='index.php?page=data_pegawai&halaman=" . $halaman . "';</script>";
 }
 
+if (isset($_GET['hapus_pegawai'])) {
+    $id_hapus = (int)$_GET['hapus_pegawai'];
+    
+    // Cegah admin menghapus akunnya sendiri yang sedang login
+    if (isset($_SESSION['id_user']) && $id_hapus == $_SESSION['id_user']) {
+        $swal_script = "Swal.fire({ title: 'Gagal!', text: 'Anda tidak dapat menghapus akun Anda sendiri yang sedang aktif.', icon: 'error' }).then(() => { window.location = 'index.php?page=data_pegawai&halaman=" . $halaman . "'; });";
+    } else {
+        $cek_u = mysqli_query($koneksi, "SELECT nama_lengkap FROM users WHERE id_user='$id_hapus'");
+        if (mysqli_num_rows($cek_u) > 0) {
+            $u_data = mysqli_fetch_assoc($cek_u);
+            $nama_p = addslashes($u_data['nama_lengkap']);
+            
+            // Hapus data terkait terlebih dahulu untuk menjaga integritas database
+            mysqli_query($koneksi, "DELETE FROM pengajuan_cuti WHERE id_user='$id_hapus'");
+            mysqli_query($koneksi, "DELETE FROM izin_keluar WHERE id_user='$id_hapus'");
+            mysqli_query($koneksi, "DELETE FROM izin_pulang WHERE id_user='$id_hapus'");
+            mysqli_query($koneksi, "DELETE FROM tbl_edoc WHERE id_user='$id_hapus'");
+            
+            // Bersihkan referensi atasan pada data pegawai lain jika ada
+            mysqli_query($koneksi, "UPDATE pengajuan_cuti SET id_atasan=NULL WHERE id_atasan='$id_hapus'");
+            mysqli_query($koneksi, "UPDATE izin_keluar SET id_atasan=NULL WHERE id_atasan='$id_hapus'");
+            mysqli_query($koneksi, "UPDATE izin_pulang SET id_atasan=0 WHERE id_atasan='$id_hapus'");
+            
+            $del = mysqli_query($koneksi, "DELETE FROM users WHERE id_user='$id_hapus'");
+            if ($del) {
+                $swal_script = "Swal.fire({ title: 'Berhasil!', text: 'Data pegawai \"$nama_p\" berhasil dihapus.', icon: 'success' }).then(() => { window.location = 'index.php?page=data_pegawai&halaman=" . $halaman . "'; });";
+            } else {
+                $swal_script = "Swal.fire({ title: 'Gagal!', text: 'Gagal menghapus data pegawai: " . addslashes(mysqli_error($koneksi)) . "', icon: 'error' });";
+            }
+        } else {
+            $swal_script = "Swal.fire({ title: 'Gagal!', text: 'Pegawai tidak ditemukan.', icon: 'error' });";
+        }
+    }
+}
+
 $batas = 10;
-$halaman = isset($_GET['halaman']) ? (int)$_GET['halaman'] : 1;
 $halaman_awal = ($halaman > 1) ? ($halaman * $batas) - $batas : 0;
 
 $keyword = "";
@@ -228,6 +264,8 @@ $nomor = $halaman_awal + 1;
     .btn-off:hover { background-color: #ffcdd2; transform: scale(1.1); }
     .btn-on { background-color: #e8f5e9; color: #2e7d32; }
     .btn-on:hover { background-color: #c8e6c9; transform: scale(1.1); }
+    .btn-delete { background-color: #fee2e2; color: #dc2626; }
+    .btn-delete:hover { background-color: #fca5a5; color: #991b1b; transform: scale(1.1); }
 
     .pagination { margin-top: 10px; }
     .pagination .page-item .page-link {
@@ -298,7 +336,7 @@ $nomor = $halaman_awal + 1;
                                 <th class="text-center" width="10%">Sisa Cuti<br><small>(Tahun Ini)</small></th>
                                 <th class="text-center" width="10%">Sisa Cuti<br><small>(Tahun Lalu)</small></th>
                                 <th class="text-center" width="10%">Sisa Cuti<br><small>(Sakit)</small></th>
-                                <th class="text-center" width="12%">Aksi</th>
+                                <th class="text-center" style="min-width: 145px; width: 145px;">Aksi</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -375,14 +413,17 @@ $nomor = $halaman_awal + 1;
                                             <i class="fas fa-pen fa-sm"></i>
                                         </button>
                                         <?php if($is_active): ?>
-                                            <button onclick="konfirmasiStatus('<?php echo $data['id_user']; ?>', 'nonaktifkan', '<?php echo addslashes($data['nama_lengkap']); ?>')" class="btn-circle-action btn-off shadow-sm" title="Nonaktifkan Akun">
+                                            <button onclick="konfirmasiStatus('<?php echo $data['id_user']; ?>', 'nonaktifkan', '<?php echo addslashes($data['nama_lengkap']); ?>')" class="btn-circle-action btn-off shadow-sm mr-2" title="Nonaktifkan Akun">
                                                 <i class="fas fa-power-off fa-sm"></i>
                                             </button>
                                         <?php else: ?>
-                                            <button onclick="konfirmasiStatus('<?php echo $data['id_user']; ?>', 'aktifkan', '<?php echo addslashes($data['nama_lengkap']); ?>')" class="btn-circle-action btn-on shadow-sm" title="Aktifkan Akun">
+                                            <button onclick="konfirmasiStatus('<?php echo $data['id_user']; ?>', 'aktifkan', '<?php echo addslashes($data['nama_lengkap']); ?>')" class="btn-circle-action btn-on shadow-sm mr-2" title="Aktifkan Akun">
                                                 <i class="fas fa-check fa-sm"></i>
                                             </button>
                                         <?php endif; ?>
+                                        <button onclick="konfirmasiHapus('<?php echo $data['id_user']; ?>', '<?php echo addslashes($data['nama_lengkap']); ?>')" class="btn-circle-action btn-delete shadow-sm" title="Hapus Pegawai">
+                                            <i class="fas fa-trash-alt fa-sm"></i>
+                                        </button>
                                     </div>
                                 </td>
                             </tr>
@@ -648,9 +689,26 @@ function konfirmasiStatus(id, aksi, nama) {
         cancelButtonText: 'Batal'
     }).then((result) => {
         if (result.isConfirmed) {
-            window.location.href = 'index.php?page=data_pegawai&toggle_status=' + id;
+            window.location.href = 'index.php?page=data_pegawai&toggle_status=' + id + '&halaman=<?php echo $halaman; ?>';
         }
     })
+}
+
+function konfirmasiHapus(id, nama) {
+    Swal.fire({
+        title: 'Hapus Pegawai?',
+        html: `Apakah Anda yakin ingin menghapus data pegawai:<br><strong class="text-danger">${nama}</strong>?<br><small class="text-muted d-block mt-2">Seluruh riwayat pengajuan cuti dan izin terkait pegawai ini juga akan dibersihkan secara permanen.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6c757d',
+        confirmButtonText: '<i class="fas fa-trash-alt mr-1"></i> Ya, Hapus!',
+        cancelButtonText: 'Batal'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = 'index.php?page=data_pegawai&hapus_pegawai=' + id + '&halaman=<?php echo $halaman; ?>';
+        }
+    });
 }
 
 $(document).ready(function() {
