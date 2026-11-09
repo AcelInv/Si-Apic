@@ -114,6 +114,15 @@ else if($page == "manage_libur" && $_SESSION['role'] == 'admin') {
 else if($page == "laporan_cuti" && $_SESSION['role'] == 'admin') {
     include 'pages/admin/laporan_cuti.php';
 }
+else if($page == "edoc_cuti" && $_SESSION['role'] == 'admin') {
+    include 'pages/admin/edoc_cuti.php';
+}
+else if($page == "edoc_pulang" && $_SESSION['role'] == 'admin') {
+    include 'pages/admin/edoc_pulang.php';
+}
+else if($page == "edoc_keluar" && $_SESSION['role'] == 'admin') {
+    include 'pages/admin/edoc_keluar.php';
+}
 
 // --- FITUR: IZIN KELUAR (Admin & User) ---
 else if($page == "izin_keluar") {

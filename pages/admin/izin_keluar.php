@@ -1,6 +1,84 @@
 <?php
 /** @var mysqli $koneksi */
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
+require_once __DIR__ . '/../../config/edoc_helper.php';
+
+// 1. PROSES FORM: EDIT DATA IZIN KELUAR KANTOR
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi_edit_izin_keluar'])) {
+    $id_izin     = (int)$_POST['id_izin'];
+    $id_atasan   = (int)$_POST['id_atasan'];
+    $tgl_izin    = mysqli_real_escape_string($koneksi, $_POST['tgl_izin']);
+    $jam_keluar  = mysqli_real_escape_string($koneksi, $_POST['jam_keluar']);
+    $jam_kembali = mysqli_real_escape_string($koneksi, $_POST['jam_kembali']);
+    $keperluan   = mysqli_real_escape_string($koneksi, trim($_POST['keperluan']));
+    $status      = mysqli_real_escape_string($koneksi, $_POST['status'] ?? 'Disetujui');
+
+    $sql_upd = "UPDATE izin_keluar SET 
+                    id_atasan = $id_atasan,
+                    tgl_izin = '$tgl_izin',
+                    jam_keluar = '$jam_keluar',
+                    jam_kembali = '$jam_kembali',
+                    keperluan = '$keperluan',
+                    status = '$status'
+                WHERE id_izin = $id_izin";
+
+    if (mysqli_query($koneksi, $sql_upd)) {
+        $_SESSION['swal'] = [
+            'icon' => 'success',
+            'title' => 'Data Diperbarui!',
+            'text' => 'Perubahan data izin keluar kantor berhasil disimpan.'
+        ];
+    } else {
+        $_SESSION['swal'] = [
+            'icon' => 'error',
+            'title' => 'Gagal Memperbarui!',
+            'text' => 'Terjadi kesalahan: ' . mysqli_error($koneksi)
+        ];
+    }
+    echo "<script>window.location.href='index.php?page=izin_keluar';</script>";
+    exit();
+}
+
+// 2. PROSES FORM: UPLOAD DOKUMEN E-DOC IZIN KELUAR
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['aksi_upload_edoc_keluar'])) {
+    $id_izin      = (int)$_POST['id_izin'];
+    $id_user      = (int)$_POST['id_user'];
+    $nomor_surat  = trim($_POST['nomor_surat'] ?? '');
+    $nama_dokumen = trim($_POST['nama_dokumen'] ?? '');
+    $tgl_dokumen  = $_POST['tgl_dokumen'] ?? date('Y-m-d');
+    $keterangan   = trim($_POST['keterangan'] ?? '');
+    $file         = $_FILES['file_edoc'] ?? null;
+
+    $res = upload_file_ke_edoc($koneksi, 'izin_keluar', $id_user, $nomor_surat, $nama_dokumen, $tgl_dokumen, $file, $keterangan, $id_izin, $_SESSION['id_user'] ?? 1);
+
+    if ($res['status']) {
+        $_SESSION['swal'] = [
+            'icon' => 'success',
+            'title' => 'Upload Berhasil!',
+            'text' => 'Dokumen izin keluar kantor berhasil diunggah dan otomatis terarsip ke e-Doc Izin Keluar Kantor.'
+        ];
+    } else {
+        $_SESSION['swal'] = [
+            'icon' => 'error',
+            'title' => 'Gagal Upload!',
+            'text' => $res['pesan']
+        ];
+    }
+    echo "<script>window.location.href='index.php?page=izin_keluar';</script>";
+    exit();
+}
+
+// Ambil daftar atasan untuk modal edit
+$q_atasan_list = mysqli_query($koneksi, "SELECT id_user, nama_lengkap, jabatan FROM users WHERE is_atasan='1' ORDER BY nama_lengkap ASC");
+$list_atasan_keluar = [];
+while ($at = mysqli_fetch_assoc($q_atasan_list)) {
+    $list_atasan_keluar[] = $at;
+}
+
 $bulanIndo = [
     'January' => 'Januari', 'February' => 'Februari', 'March' => 'Maret',
     'April' => 'April', 'May' => 'Mei', 'June' => 'Juni',
@@ -212,10 +290,15 @@ $no = $halaman_awal + 1;
     }
 
     .btn-circle-action { 
-        width: 35px; height: 35px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: none; transition: 0.2s; cursor: pointer; 
+        width: 33px; height: 33px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; border: none; transition: 0.2s; cursor: pointer; 
     }
     .btn-print { background-color: #e3f2fd; color: #0d47a1; }
     .btn-print:hover { background-color: #bbdefb; transform: scale(1.1); }
+    .btn-edit { background-color: #fff8e1; color: #f57f17; }
+    .btn-edit:hover { background-color: #ffecb3; transform: scale(1.1); }
+    .btn-upload { background-color: #e0f2f1; color: #00695c; }
+    .btn-upload:hover { background-color: #b2dfdb; transform: scale(1.1); }
+    .btn-edoc-done { background-color: #d1fae5; color: #047857; box-shadow: 0 0 0 2px #10b981 !important; }
 
     .search-wrapper { position: relative; width: 100%; max-width: 300px; }
     .search-input-inside {
@@ -425,9 +508,51 @@ $no = $halaman_awal + 1;
                                         <td class="align-middle" style="font-size: 0.85rem;"><?= $row['keperluan']; ?></td>
                                         <td class="align-middle" style="font-size: 0.85rem;"><?= $row['atasan'] ?? '-'; ?></td>
                                         <td class="text-center align-middle">
-                                            <a href="pages/cetak_izin_keluar.php?id=<?= $row['id_izin']; ?>" target="_blank" class="btn-circle-action btn-print shadow-sm" title="Cetak Surat">
-                                                <i class="fas fa-print fa-sm"></i>
-                                            </a>
+                                            <?php 
+                                            $edoc_items = get_edoc_terkait($koneksi, 'izin_keluar', $row['id_izin']);
+                                            $has_edoc = !empty($edoc_items);
+                                            ?>
+                                            <div class="d-flex justify-content-center align-items-center">
+                                                <!-- Cetak -->
+                                                <a href="pages/cetak_izin_keluar.php?id=<?= $row['id_izin']; ?>" target="_blank" class="btn-circle-action btn-print shadow-sm mr-1" title="Cetak Surat">
+                                                    <i class="fas fa-print fa-sm"></i>
+                                                </a>
+
+                                                <!-- Edit Data (Perbaiki Salah Ketik) -->
+                                                <button type="button" class="btn-circle-action btn-edit shadow-sm mr-1 btn-modal-edit-keluar"
+                                                        data-id="<?= $row['id_izin'] ?>"
+                                                        data-iduser="<?= $row['id_user'] ?>"
+                                                        data-nama="<?= htmlspecialchars($row['pemohon']) ?>"
+                                                        data-idatasan="<?= $row['id_atasan'] ?>"
+                                                        data-tgl="<?= $row['tgl_izin'] ?>"
+                                                        data-jamkeluar="<?= date('H:i', strtotime($row['jam_keluar'])) ?>"
+                                                        data-jamkembali="<?= date('H:i', strtotime($row['jam_kembali'])) ?>"
+                                                        data-keperluan="<?= htmlspecialchars($row['keperluan']) ?>"
+                                                        data-status="<?= htmlspecialchars($row['status']) ?>"
+                                                        title="Edit Data Izin">
+                                                    <i class="fas fa-pencil-alt fa-sm"></i>
+                                                </button>
+
+                                                <!-- Upload Dokumen (Otomatis ke e-Doc) -->
+                                                <button type="button" class="btn-circle-action btn-upload shadow-sm mr-1 btn-modal-upload-keluar <?= $has_edoc ? 'btn-edoc-done' : '' ?>"
+                                                        data-id="<?= $row['id_izin'] ?>"
+                                                        data-iduser="<?= $row['id_user'] ?>"
+                                                        data-nama="<?= htmlspecialchars($row['pemohon']) ?>"
+                                                        data-tgl="<?= $row['tgl_izin'] ?>"
+                                                        title="<?= $has_edoc ? 'Dokumen sudah diupload ke e-Doc (Klik untuk tambah dokumen baru)' : 'Upload Dokumen (Otomatis Masuk ke e-Doc)'; ?>">
+                                                    <i class="fas fa-cloud-upload-alt fa-sm"></i>
+                                                </button>
+                                            </div>
+                                            <?php if ($has_edoc): ?>
+                                                <div class="mt-1">
+                                                    <a href="uploads/edoc/<?= htmlspecialchars($edoc_items[0]['file_dokumen']) ?>" target="_blank" 
+                                                       class="badge badge-success px-2 py-1 shadow-sm text-white" 
+                                                       style="background-color: #059669; font-size: 0.70rem; font-weight: 600; border-radius: 6px; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;" 
+                                                       title="Klik untuk melihat berkas e-Doc (<?= htmlspecialchars($edoc_items[0]['nama_dokumen']) ?>)">
+                                                        <i class="fas fa-check-circle"></i> Berhasil Terupload
+                                                    </a>
+                                                </div>
+                                            <?php endif; ?>
                                         </td>
                                     </tr>
                                     <?php endwhile; ?>
@@ -468,6 +593,169 @@ $no = $halaman_awal + 1;
             </div>
         </div>
 
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL 1: EDIT DATA IZIN KELUAR KANTOR (PERBAIKI SALAH KETIK)
+     ═══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalEditIzinKeluar" tabindex="-1" role="dialog" aria-labelledby="modalEditIzinKeluarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header py-3" style="background: linear-gradient(135deg, #004d00 0%, #003300 100%); color: white; border-bottom: 3px solid #F9A825;">
+                <h5 class="modal-title font-weight-bold" id="modalEditIzinKeluarLabel" style="font-size: 1.05rem;">
+                    <i class="fas fa-pencil-alt mr-2 text-warning"></i> Edit Data Izin Keluar Kantor
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 0.85;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            
+            <form action="index.php?page=izin_keluar" method="POST" autocomplete="off">
+                <input type="hidden" name="aksi_edit_izin_keluar" value="1">
+                <input type="hidden" name="id_izin" id="edit_keluar_id_izin">
+
+                <div class="modal-body p-4" style="background: #fdfdfd;">
+                    
+                    <!-- Info Pemohon -->
+                    <div class="p-3 mb-3 rounded" style="background: #f0fdf4; border: 1px solid #bbf7d0;">
+                        <div class="d-flex align-items-center">
+                            <i class="fas fa-user-circle fa-2x text-success mr-3"></i>
+                            <div>
+                                <small class="text-muted d-block">Nama Pegawai / Pemohon:</small>
+                                <div class="font-weight-bold text-dark" id="edit_keluar_nama_text" style="font-size: 1rem;">-</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Atasan Langsung <span class="text-danger">*</span></label>
+                        <select name="id_atasan" id="edit_keluar_id_atasan" class="form-control" required>
+                            <option value="">-- Pilih Atasan --</option>
+                            <?php foreach ($list_atasan_keluar as $at): ?>
+                                <option value="<?= $at['id_user'] ?>"><?= htmlspecialchars($at['nama_lengkap']) ?> (<?= htmlspecialchars($at['jabatan']) ?>)</option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Tanggal Izin <span class="text-danger">*</span></label>
+                        <input type="date" name="tgl_izin" id="edit_keluar_tgl_izin" class="form-control" required>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="font-weight-bold small text-dark">Jam Keluar <span class="text-danger">*</span></label>
+                            <input type="time" name="jam_keluar" id="edit_keluar_jam_keluar" class="form-control" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="font-weight-bold small text-dark">Jam Kembali <span class="text-danger">*</span></label>
+                            <input type="time" name="jam_kembali" id="edit_keluar_jam_kembali" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Keperluan <span class="text-danger">*</span></label>
+                        <textarea name="keperluan" id="edit_keluar_keperluan" class="form-control" rows="2" required placeholder="Keperluan izin keluar..."></textarea>
+                    </div>
+
+                    <div class="form-group mb-1">
+                        <label class="font-weight-bold small text-dark">Status Izin</label>
+                        <select name="status" id="edit_keluar_status" class="form-control font-weight-bold">
+                            <option value="Disetujui">Disetujui</option>
+                            <option value="Diajukan">Diajukan</option>
+                            <option value="Ditolak">Ditolak</option>
+                        </select>
+                    </div>
+
+                </div>
+                
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-secondary px-3" data-dismiss="modal">
+                        <i class="fas fa-times mr-1"></i> Batal
+                    </button>
+                    <button type="submit" class="btn btn-primary px-4 font-weight-bold" style="background:#004d00; border-color:#004d00;">
+                        <i class="fas fa-save mr-1"></i> Simpan Perubahan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MODAL 2: UPLOAD DOKUMEN IZIN KELUAR (OTOMATIS MASUK E-DOC)
+     ═══════════════════════════════════════════════════════════ -->
+<div class="modal fade" id="modalUploadEdocKeluar" tabindex="-1" role="dialog" aria-labelledby="modalUploadEdocKeluarLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content shadow-lg border-0" style="border-radius: 16px; overflow: hidden;">
+            <div class="modal-header py-3" style="background: linear-gradient(135deg, #004d00 0%, #003300 100%); color: white; border-bottom: 3px solid #10b981;">
+                <h5 class="modal-title font-weight-bold" id="modalUploadEdocKeluarLabel" style="font-size: 1.05rem;">
+                    <i class="fas fa-cloud-upload-alt mr-2 text-warning"></i> Upload Dokumen Izin Keluar (e-Doc)
+                </h5>
+                <button type="button" class="close text-white" data-dismiss="modal" aria-label="Close" style="opacity: 0.85;">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            
+            <form action="index.php?page=izin_keluar" method="POST" enctype="multipart/form-data" autocomplete="off">
+                <input type="hidden" name="aksi_upload_edoc_keluar" value="1">
+                <input type="hidden" name="id_izin" id="upload_keluar_id_izin">
+                <input type="hidden" name="id_user" id="upload_keluar_id_user">
+
+                <div class="modal-body p-4" style="background: #fdfdfd;">
+                    
+                    <div class="alert alert-info border-0 shadow-sm p-3 mb-3 small" style="border-radius: 10px; background:#e0f2fe; color:#0369a1;">
+                        <i class="fas fa-magic mr-1 font-weight-bold"></i> Berkas yang diunggah di sini <strong>otomatis tersimpan & terarsip ke menu e-Doc Izin Keluar Kantor</strong> tanpa perlu input ulang atau upload manual.
+                    </div>
+
+                    <!-- Info Pemohon -->
+                    <div class="p-3 mb-3 rounded" style="background: #f8fafc; border: 1px solid #e2e8f0;">
+                        <small class="text-muted d-block">Pemohon Izin:</small>
+                        <div class="font-weight-bold text-dark" id="upload_keluar_nama_text">-</div>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Nomor Surat / Bukti Izin (Opsional)</label>
+                        <input type="text" name="nomor_surat" id="upload_keluar_nomor_surat" class="form-control" placeholder="Contoh: W13-U1/ /KP.05.2/XI/2026">
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Judul Dokumen (di e-Doc) <span class="text-danger">*</span></label>
+                        <input type="text" name="nama_dokumen" id="upload_keluar_nama_dokumen" class="form-control" required placeholder="Contoh: Surat Izin Keluar Kantor - Nama Pegawai">
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Tanggal Dokumen <span class="text-danger">*</span></label>
+                        <input type="date" name="tgl_dokumen" id="upload_keluar_tgl_dokumen" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+
+                    <div class="form-group mb-3">
+                        <label class="font-weight-bold small text-dark">Pilih Berkas Dokumen <span class="text-danger">*</span></label>
+                        <div class="custom-file">
+                            <input type="file" name="file_edoc" id="upload_keluar_file_input" class="custom-file-input" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" required>
+                            <label class="custom-file-label" id="upload_keluar_file_label" for="upload_keluar_file_input">Pilih file (PDF, JPG, PNG, DOC, maks 10MB)...</label>
+                        </div>
+                        <small class="text-muted mt-1 d-block">Format diperbolehkan: PDF, JPG, PNG, DOC, DOCX. Maksimal 10 MB.</small>
+                    </div>
+
+                    <div class="form-group mb-1">
+                        <label class="font-weight-bold small text-dark">Keterangan / Catatan Arsip (Opsional)</label>
+                        <textarea name="keterangan" id="upload_keluar_keterangan" class="form-control" rows="2" placeholder="Catatan tambahan dokumen e-Doc..."></textarea>
+                    </div>
+
+                </div>
+                
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-secondary px-3" data-dismiss="modal">
+                        <i class="fas fa-times mr-1"></i> Batal
+                    </button>
+                    <button type="submit" class="btn btn-success px-4 font-weight-bold" style="background:#059669; border-color:#059669;">
+                        <i class="fas fa-cloud-upload-alt mr-1"></i> Upload ke e-Doc
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
 
@@ -536,5 +824,61 @@ $no = $halaman_awal + 1;
                 'index.php?page=izin_keluar&cari_izin=' + encodeURIComponent(keyword) + ' #area_tabel_izin'
             );
         });
+
+        // Handler Modal Edit Izin Keluar
+        $(document).on('click', '.btn-modal-edit-keluar', function() {
+            var btn = $(this);
+            $('#edit_keluar_id_izin').val(btn.data('id'));
+            $('#edit_keluar_nama_text').text(btn.data('nama'));
+            $('#edit_keluar_id_atasan').val(btn.data('idatasan'));
+            $('#edit_keluar_tgl_izin').val(btn.data('tgl'));
+            $('#edit_keluar_jam_keluar').val(btn.data('jamkeluar'));
+            $('#edit_keluar_jam_kembali').val(btn.data('jamkembali'));
+            $('#edit_keluar_keperluan').val(btn.data('keperluan'));
+            $('#edit_keluar_status').val(btn.data('status'));
+
+            $('#modalEditIzinKeluar').modal('show');
+        });
+
+        // Handler Modal Upload Dokumen e-Doc
+        $(document).on('click', '.btn-modal-upload-keluar', function() {
+            var btn = $(this);
+            var nama = btn.data('nama');
+            var tgl = btn.data('tgl');
+
+            $('#upload_keluar_id_izin').val(btn.data('id'));
+            $('#upload_keluar_id_user').val(btn.data('iduser'));
+            $('#upload_keluar_nama_text').text(nama);
+            
+            var defaultJudul = 'Surat Izin Keluar Kantor - ' + nama;
+            if (tgl) {
+                defaultJudul += ' (' + tgl + ')';
+            }
+            $('#upload_keluar_nama_dokumen').val(defaultJudul);
+            $('#upload_keluar_nomor_surat').val('');
+            $('#upload_keluar_tgl_dokumen').val(new Date().toISOString().split('T')[0]);
+            $('#upload_keluar_keterangan').val('');
+            $('#upload_keluar_file_input').val('');
+            $('#upload_keluar_file_label').text('Pilih file (PDF, JPG, PNG, DOC, maks 10MB)...');
+
+            $('#modalUploadEdocKeluar').modal('show');
+        });
+
+        // Update custom file label on change
+        $(document).on('change', '#upload_keluar_file_input', function() {
+            var fileName = $(this).val().split('\\').pop();
+            $('#upload_keluar_file_label').text(fileName ? fileName : 'Pilih file (PDF, JPG, PNG, DOC, maks 10MB)...');
+        });
     });
+
+    <?php if (isset($_SESSION['swal'])) { ?>
+        Swal.fire({
+            icon: '<?php echo $_SESSION['swal']['icon']; ?>',
+            title: '<?php echo $_SESSION['swal']['title']; ?>',
+            text: '<?php echo $_SESSION['swal']['text']; ?>',
+            timer: 3000,
+            showConfirmButton: false
+        });
+        <?php unset($_SESSION['swal']); ?>
+    <?php } ?>
 </script>

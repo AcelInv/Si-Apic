@@ -7,10 +7,19 @@ if (!$pageAktif) {
 ?>
 
 <ul class="navbar-nav sidebar sidebar-dark accordion" id="accordionSidebar"
-    style="background: linear-gradient(180deg, #004d00 10%, #004d00 100%); position: sticky; top: 0; height: 100vh; overflow-y: hidden; overflow-x: hidden; z-index: 1050;">
+    style="background: linear-gradient(180deg, #004d00 10%, #004d00 100%); position: sticky; top: 0; height: 100vh; overflow-y: auto; overflow-x: hidden; z-index: 1050;">
 
     <style>
-        .sidebar .nav-item .nav-link span { font-size: 0.8rem; }
+        @media (min-width: 768px) {
+            .sidebar:not(.toggled) {
+                width: 15.5rem !important;
+            }
+        }
+        .sidebar .nav-item .nav-link span { 
+            font-size: 0.78rem !important; 
+            letter-spacing: -0.15px;
+            white-space: nowrap;
+        }
         .sidebar-brand-text { font-size: 0.85rem; }
 
         #accordionSidebar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -32,11 +41,14 @@ if (!$pageAktif) {
             margin: 0 0 .18rem 0 !important;
         }
         .sidebar:not(.toggled) .nav-item .nav-link{
-            padding: .58rem .9rem !important;
+            padding: .55rem .85rem !important;
+            display: flex;
+            align-items: center;
             line-height: 1.18 !important;
         }
         .sidebar:not(.toggled) .nav-item .nav-link i{
-            font-size: 1rem !important;
+            font-size: .95rem !important;
+            flex-shrink: 0;
             margin-right: .55rem !important;
         }
         .sidebar:not(.toggled) .sidebar-heading{
@@ -179,6 +191,30 @@ if (!$pageAktif) {
             <a class="nav-link" href="index.php?page=manage_libur">
                 <i class="fas fa-fw fa-calendar-alt"></i>
                 <span>Atur Libur Nasional</span>
+            </a>
+        </li>
+
+        <hr class="sidebar-divider">
+
+        <div class="sidebar-heading">Upload Dokumen (e-Doc)</div>
+        <li class="nav-item <?php echo ($pageAktif == 'edoc_cuti') ? 'active' : ''; ?>">
+            <a class="nav-link" href="index.php?page=edoc_cuti">
+                <i class="fas fa-fw fa-file-contract"></i>
+                <span>e-Doc Keluar Cuti</span>
+            </a>
+        </li>
+
+        <li class="nav-item <?php echo ($pageAktif == 'edoc_pulang') ? 'active' : ''; ?>">
+            <a class="nav-link" href="index.php?page=edoc_pulang">
+                <i class="fas fa-fw fa-file-export"></i>
+                <span>e-Doc Keluar Awal</span>
+            </a>
+        </li>
+
+        <li class="nav-item <?php echo ($pageAktif == 'edoc_keluar') ? 'active' : ''; ?>">
+            <a class="nav-link" href="index.php?page=edoc_keluar">
+                <i class="fas fa-fw fa-file-signature"></i>
+                <span>e-Doc Izin Keluar Kantor</span>
             </a>
         </li>
 
